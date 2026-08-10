@@ -38,6 +38,22 @@
  * is definitionally not given. It is an ordinary Bare module that the platform's
  * kernel-side code requires directly.
  *
- * @typedef {import('./lib/lan').LanOption} LanOption
+ * ## Types come through `artifact-lan/lan`, and this file re-declares none
+ *
+ * There is no `@typedef` here, and that absence is deliberate rather than an
+ * omission to be filled in. This file is `module.exports = <expression>`, which
+ * TypeScript reads as `export =`; a JSDoc `@typedef` in such a file does not
+ * become a named type export of it, and when the whole tree is compiled as one
+ * program the declaration collides with the one it was aliasing —
+ * `TS2300: Duplicate identifier 'LanOption'`, reported against this line and
+ * against any other re-export that did the same thing.
+ *
+ * It is invisible in this repo's own `npm run typecheck` and in `artifact-net`'s,
+ * and only appears when a consumer compiles both packages together, which is
+ * exactly the failure mode `AGENTS.md` means by "verify against the whole set,
+ * not one repo". So `LanOption` is declared in **one** place, `lib/lan.js`, and
+ * consumers annotate against `import('artifact-lan/lan').LanOption` — a subpath
+ * this package declares in `exports`, so `--check-doors` polices the reference
+ * rather than leaving it to be discovered.
  */
 module.exports = require('./lib/lan')
