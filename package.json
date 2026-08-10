@@ -1,0 +1,42 @@
+{
+  "name": "artifact-lan",
+  "version": "0.1.0",
+  "description": "Multicast peer discovery for hyperdht — one 18-byte beacon per device, and the rendezvous node behind it",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "s=0; for f in test/lan.test.js; do bare \"$f\" || s=1; done; exit $s",
+    "typecheck": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AustinPoonia/artifact-lan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AustinPoonia/artifact-lan/issues"
+  },
+  "homepage": "https://github.com/AustinPoonia/artifact-lan#readme",
+  "exports": {
+    ".": "./index.js",
+    "./lan": "./lib/lan.js",
+    "./package": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "vendor.d.ts"
+  ],
+  "dependencies": {
+    "bare-crypto": "^1.15.3",
+    "bare-dgram": "^1.0.1",
+    "hyperdht": "^6.33.0"
+  },
+  "devDependencies": {
+    "bare-assert": "^1.2.0",
+    "bare-buffer": "^3.6.2",
+    "bare-runtime": "^1.30.3",
+    "bare-tap": "^1.0.0",
+    "typescript": "^7.0.2"
+  }
+}
