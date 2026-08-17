@@ -49,3 +49,13 @@ declare module 'bare-tap' {
  * the next accidental `Bare.exit()` in a test compile.
  */
 declare const Bare: { pid: number }
+
+/**
+ * Declared the same way `artifact-net/vendor.d.ts` declares it — `export =` over
+ * `any` — and not in `lib/vendor-lan.d.ts`, which travels to consumers. A named
+ * export here would be this package describing a module a consumer already
+ * describes, and it failed exactly that way once: `TS2305: Module
+ * '"hypercore-crypto"' has no exported member 'randomBytes'` out of
+ * `artifact-net`'s typecheck of our own `lib/lan.js`.
+ */
+declare module 'hypercore-crypto' { const crypto: any; export = crypto }
