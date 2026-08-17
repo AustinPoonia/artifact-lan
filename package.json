@@ -1,7 +1,7 @@
 {
   "name": "artifact-lan",
   "version": "0.1.0",
-  "description": "Multicast peer discovery for hyperdht — one 18-byte beacon per device, and the rendezvous node behind it",
+  "description": "Multicast peer discovery for hyperdht \u2014 one 18-byte beacon per device, and the rendezvous node behind it",
   "license": "Apache-2.0",
   "type": "commonjs",
   "main": "index.js",
@@ -28,8 +28,8 @@
     "vendor.d.ts"
   ],
   "dependencies": {
-    "bare-crypto": "^1.15.3",
     "bare-dgram": "^1.0.1",
+    "hypercore-crypto": "^3.7.0",
     "hyperdht": "^6.33.0"
   },
   "devDependencies": {
