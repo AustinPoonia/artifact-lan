@@ -21,6 +21,22 @@ declare function setTimeout (cb: (...args: any[]) => void, ms?: number): unknown
 declare function clearTimeout (timer: unknown): void
 
 /**
+ * `console` is a Bare global (bare-console) and the ES2022 lib with `types: []`
+ * knows nothing about it. One method, because one is used: the suite prints its
+ * `# NOT MEASURED [multicast]:` marker on stdout, which is where `all-repos.sh`
+ * reads a case that did not run back out of the log. `error` is deliberately
+ * absent rather than added for symmetry — nothing here writes to stderr, and the
+ * day something does, the error is a prompt to decide that on purpose.
+ *
+ * Here and not in `lib/vendor-lan.d.ts`, which travels to consumers through the
+ * `file:` link and must only add modules a consumer has not already described
+ * better: `artifact-net/vendor.d.ts:122` declares this global itself, and a
+ * second declaration in a file it cannot edit is the duplicate-identifier error
+ * that file's header records paying for once already.
+ */
+declare const console: { log (...args: any[]): void }
+
+/**
  * `bare-tap`, at the three methods the suite uses.
  *
  * `plan`, `pass`, `fail` — the suite collects its cases, plans the length and
