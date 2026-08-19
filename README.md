@@ -124,6 +124,28 @@ sampler reports no address at all.
   second is the one that can see the other. The fix for both is the same, a swarm
   whose DHT can be added to after construction, and it is not built.
 
+- **Any way to steer multicast, or to verify that a join delivers.**
+  `udx-native` exposes `addMembership`, `dropMembership` and `setTTL` and nothing
+  else, so there is no `IP_MULTICAST_IF`: a multi-homed host announces on whatever
+  `224.0.0.0/4` routes to, and joins every interface hoping one of them is right.
+  Measured across a direct two-host segment: joins accepted on `en0` *and* `en8`,
+  frames leaving on `en0`, and — separately and still unexplained — eight frames
+  arriving on `en8` under `tcpdump` with `0 packets dropped by kernel` that the
+  socket never handed up. Bind-to-address is measured and is not a workaround.
+
+  What is here instead is `beacon.memberships` and `beacon.announcing`. The first
+  is named for what it holds, the joins the kernel **accepted** — an `ok` does mean
+  a membership exists, since a bogus interface throws `EADDRNOTAVAIL` and a
+  duplicate throws `EADDRINUSE`, and it does not mean anything arriving there is
+  delivered. The second is the interface this device's frames actually left on, read
+  off the kernel's loopback copy of one of them, `null` where multicast loopback is
+  off. A device whose `memberships` names an interface its `announcing` does not is
+  a device invisible on that segment, and that used to take two machines and
+  `tcpdump` to find out. Neither field is a health check: hearing your own echo is
+  one host's kernel talking to itself, and nothing in this module branches on
+  either. Requiring the echo before declaring the beacon up was considered and
+  rejected — it returns a clean yes on the very host whose segment is broken.
+
 - **Confidentiality of the topic set.** A LAN DHT is small, so every node on it
   stores announce records for every topic. A device on the segment can see that
   *some* peer announced *some* topic hash, cannot invert the hash and cannot join
@@ -145,7 +167,7 @@ sampler reports no address at all.
 ## Development
 
 ```
-npm test         # 15 cases under the Bare runtime, on real multicast
+npm test         # 17 cases under the Bare runtime, on real multicast
 npm run typecheck
 ```
 
@@ -160,7 +182,9 @@ below the JavaScript, so a mocked socket would pass while the module did not wor
 ### The eight cases that stayed behind
 
 This module and its suite came out of `artifact-net`, where the file held
-twenty-three cases. Fifteen are here. The other eight assert that `artifact-net`'s
+twenty-three cases. Fifteen came across — the suite is seventeen now, and the two
+added since are the multicast-ceiling cases the section above describes. The other
+eight assert that `artifact-net`'s
 `Node` and `Operator` *use* this module correctly — a device joining a network with
 the DHT taken away entirely, an operator serving one over the segment, `lan: false`
 opening no socket — and they need corestores, signed manifests and hyperswarm.

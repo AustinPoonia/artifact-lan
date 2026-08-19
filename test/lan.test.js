@@ -225,6 +225,63 @@ test('junk on the group is ignored rather than parsed', async () => {
   assert.equal(a.peers.size, 0, `nothing on that group was ours, got ${JSON.stringify(a.nodes())}`)
 })
 
+test('an accepted join is a real membership, and a join on an interface this host does not have is refused', async () => {
+  // The measurement behind `memberships` being named for acceptance rather than
+  // for health, and it is the half of the two-host finding that a single machine
+  // can hold. `addMembership` returning `ok` is *not* vacuous — it refuses an
+  // address no interface holds, and it refuses a second join of a group it already
+  // has — so what an `ok` fails to prove is delivery, not existence. If udx ever
+  // stops throwing on either of these, `lib/lan.js`'s header is overstating what
+  // an `ok` means and this case is where that surfaces.
+  const where = isolated()
+  const socket = createSocket({ reuseAddress: true })
+  await new Promise((resolve) => socket.bind(where.socketPort, '0.0.0.0', () => resolve(undefined)))
+  const udx = socket._socket ?? socket
+
+  udx.addMembership(where.group, '')
+  // 203.0.113.0/24 is RFC 5737 TEST-NET-3 and is on no host by construction.
+  throws(() => udx.addMembership(where.group, '203.0.113.7'), /not available/i,
+    'a join on an interface address this host does not hold')
+  throws(() => udx.addMembership(where.group, ''), /already in use/i,
+    'a second join of a group already joined on the same interface')
+
+  await socket.close()
+})
+
+test('a beacon reports which interface it announces on, separately from what it joined', async () => {
+  // The one fact a lone host can measure, and the reason it is not a health
+  // check: it comes off multicast loopback, so it says nothing about the wire.
+  // Driven from a second socket carrying this beacon's own nonce rather than by
+  // waiting on the kernel's echo — same delivery path the two cases either side
+  // of this one already depend on, and no dependence on this beacon's own send
+  // having gone anywhere.
+  const where = isolated()
+  const a = await Beacon.open({ ...where, port: 40007 })
+  teardown.push(async () => { await a.close() })
+
+  assert.ok(a.memberships.length > 0, 'a beacon that opened joined nothing')
+  const local = new Set((a.socket._socket ?? a.socket).udx.networkInterfaces()
+    .filter((/** @type {any} */ n) => n.family === 4 && !n.internal)
+    .map((/** @type {any} */ n) => n.host))
+
+  for (const iface of a.memberships) {
+    assert.ok(iface === '' || local.has(iface),
+      `memberships holds ${JSON.stringify(iface)}, which is not an address of this host`)
+  }
+
+  const echo = createSocket({ reuseAddress: true })
+  await new Promise((resolve) => echo.bind(0, '0.0.0.0', () => resolve(undefined)))
+  const frame = encode(40007, a.nonce)
+  await echo.send(frame, 0, frame.byteLength, where.socketPort, where.group)
+  const heard = await until(() => a.announcing !== null)
+  await echo.close()
+
+  assert.ok(heard, 'a beacon never learned the interface it announces on')
+  assert.strictEqual(a.peers.size, 0, 'our own frame must never become a peer')
+  assert.ok(local.has(/** @type {string} */ (a.announcing)),
+    `announcing ${JSON.stringify(a.announcing)}, which is not a non-internal IPv4 address of this host`)
+})
+
 test('a peer that beacons a good frame is picked up from the same socket', async () => {
   const where = isolated()
   const a = await Beacon.open({ ...where, port: 40005 })
