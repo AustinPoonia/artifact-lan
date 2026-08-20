@@ -71,7 +71,7 @@ const same = (a, b, m) =>
   assert.equal(JSON.stringify(a), JSON.stringify(b), m ?? `${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
 
 /**
- * Assert `fn` throws, and that the message says which refusal it was.
+ * Assert `fn` throws, and that the error says which refusal it was.
  *
  * `instanceof` rather than a cast over `err && err.message`: the cast asserted
  * nothing and then handed the result to `RegExp.test`, which wants a string and
@@ -79,16 +79,47 @@ const same = (a, b, m) =>
  * An `Error` has a `message` and everything else is rethrown rather than quietly
  * matched against the string `"undefined"`.
  *
+ * ## Two ways to say which refusal, and the split is not stylistic
+ *
+ * A `RegExp` matches `err.message`, and is for a refusal **this tree** writes —
+ * every one of them here is `encode`, turning down port zero, port 65536, a
+ * fractional port or a nonce that is not eight bytes. The string is ours, so
+ * pinning it pins our own wording, and changing it is a diff somebody reads.
+ *
+ * An array of errno codes matches `err.code`, and is for a refusal the **kernel**
+ * writes. Those messages are libuv's `uv_strerror` output and differ per platform
+ * for the same error, so a message match there asserts which host is running as
+ * much as it asserts the behaviour — and it does it silently, reading as a
+ * behaviour assertion right up until the other platform runs it. That is not
+ * hypothetical: `/not available/i` held on macOS's `EADDRNOTAVAIL` for a join of
+ * an interface no host has, and reddened ubuntu, which answers the identical join
+ * with `ENODEV`. The code is the half that is stable across kernels, so it is the
+ * half a kernel refusal is asserted on. A list rather than one string because one
+ * refusal genuinely has two names; that is not a platform branch and there is
+ * deliberately no way to write one here.
+ *
+ * The failure text carries the code *and* the message for the same reason the
+ * split exists: the code is what was asserted, and the message is what makes an
+ * unfamiliar errno recognisable to whoever is reading the red.
+ *
  * `assert.ok(false, …)` on the last line rather than `assert.fail`, which
  * `bare-assert` exports and does not declare. Note it sits *outside* the `try`,
  * so an `AssertionError` from here cannot be caught by the `catch` above it.
  *
- * @param {() => any} fn @param {RegExp} re
+ * @param {() => any} fn @param {RegExp | string[]} want
  */
-function throws (fn, re, /** @type {string} */ why) {
+function throws (fn, want, /** @type {string} */ why) {
   try { fn() } catch (err) {
     if (!(err instanceof Error)) throw err
-    return assert.ok(re.test(err.message), `${why}: threw ${JSON.stringify(err.message)}, wanted ${re}`)
+    if (!Array.isArray(want)) {
+      return assert.ok(want.test(err.message), `${why}: threw ${JSON.stringify(err.message)}, wanted ${want}`)
+    }
+    // `err.code` and not a declared property: `Error` has none, and the cast is
+    // the narrow kind — a `code` that is absent reads as `undefined`, fails the
+    // `includes`, and says so in the text rather than passing.
+    const code = /** @type {any} */ (err).code
+    return assert.ok(want.includes(code),
+      `${why}: threw ${JSON.stringify(code)} (${JSON.stringify(err.message)}), wanted one of ${want.join(', ')}`)
   }
   assert.ok(false, `${why}: returned instead of throwing`)
 }
@@ -497,9 +528,32 @@ test('an accepted join is a real membership, and a join on an interface this hos
 
   udx.addMembership(where.group, '')
   // 203.0.113.0/24 is RFC 5737 TEST-NET-3 and is on no host by construction.
-  throws(() => udx.addMembership(where.group, '203.0.113.7'), /not available/i,
+  //
+  // Matched on the errno **code**, and the message match that was here is what
+  // broke. `/not available/i` was written against macOS, which refuses this join
+  // with `EADDRNOTAVAIL` — "address not available"; linux refuses the identical
+  // join with `ENODEV` — "no such device" — so ubuntu read `not ok 11` on a kernel
+  // that had done exactly what this case is named for. Both spellings are libuv's
+  // `uv_strerror` output, so a message match on a *kernel* refusal asserts which
+  // host is running as much as it asserts the behaviour; the code is the stable
+  // half of the same error and is the half the claim is about. Measured on both:
+  // darwin-arm64 gives `EADDRNOTAVAIL`/"address not available", linux-arm64 gives
+  // `ENODEV`/"no such device".
+  //
+  // Two codes because two kernels have two names for "no interface holds that
+  // address" — not because anything here asks which kernel it is on. Nothing in
+  // this file reads `os.platform()`, `CI` or `GITHUB_ACTIONS`; `probeMulticast`'s
+  // header says at length why, and that argument covers this line too, since a
+  // platform branch would assert the refusal on one host and nothing at all on
+  // the other. A third platform with a third errno belongs beside these two,
+  // still with no branch.
+  throws(() => udx.addMembership(where.group, '203.0.113.7'), ['EADDRNOTAVAIL', 'ENODEV'],
     'a join on an interface address this host does not hold')
-  throws(() => udx.addMembership(where.group, ''), /already in use/i,
+  // `EADDRINUSE` on both hosts measured, so `/already in use/i` would still have
+  // held here. Moved anyway, so that the two halves of one claim are not measured
+  // two different ways and so the next platform costs a code in a list rather
+  // than a fresh judgement about which message spelling is safe.
+  throws(() => udx.addMembership(where.group, ''), ['EADDRINUSE'],
     'a second join of a group already joined on the same interface')
 })
 
