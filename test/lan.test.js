@@ -476,6 +476,23 @@ test('an accepted join is a real membership, and a join on an interface this hos
   const where = isolated()
   const socket = createSocket({ reuseAddress: true })
   await new Promise((resolve) => socket.bind(where.socketPort, '0.0.0.0', () => resolve(undefined)))
+  // Closed from `teardown` and not by an `await socket.close()` on the last line,
+  // and the difference is a red versus a wedged run. The two assertions below sit
+  // between the bind and that close, so a failing one skips it and leaves a bound
+  // socket referenced in bare's loop: `main()` catches the failure and prints
+  // `not ok`, the plan completes, and then the process has nothing left to do and
+  // still cannot exit. Measured on ubuntu-24.04-arm64, where the first assertion
+  // below did exactly that — a complete `1..17` followed by 300s of silence and a
+  // watchdog kill in `all-repos.sh`, which reads as "a command that stopped"
+  // rather than as the one assertion that actually failed.
+  //
+  // Every `Beacon` and `Lan` in this file already goes to `teardown`, and the
+  // three bare sockets that do not — `noise`, `echo` and `other` — were checked
+  // rather than assumed: no assertion in those cases runs while one of them is
+  // open, so an inline close is reached on every path a failure can take. This was
+  // the only case holding an open socket across an `assert`, which is why it is
+  // the only one that wedged, and the fix is the idiom already here.
+  teardown.push(async () => { await socket.close() })
   const udx = socket._socket ?? socket
 
   udx.addMembership(where.group, '')
@@ -484,8 +501,6 @@ test('an accepted join is a real membership, and a join on an interface this hos
     'a join on an interface address this host does not hold')
   throws(() => udx.addMembership(where.group, ''), /already in use/i,
     'a second join of a group already joined on the same interface')
-
-  await socket.close()
 })
 
 test('a beacon reports which interface it announces on, separately from what it joined', async () => {
